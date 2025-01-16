@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>පාසල් ශිෂ්‍ය සංඛ්‍යා Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Previous styles remain the same */
+        .backup-restore-section {
+            margin-bottom: 20px;
+        }
+        .edit-delete-buttons {
+            display: flex;
+            gap: 10px;
+            margin-left: auto;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="text-center mb-4">
+            <h4 class="text-white">ශිෂ්‍ය කළමනාකරණය</h4>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link active" href="#">
+                <i class="fas fa-fw fa-tachometer-alt me-2"></i>
+                Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container-fluid">
+            <!-- Page Heading -->
+            <div class="d-sm-flex align-items-center justify-content-between mb-4">
+                <h1 class="h3 mb-0 text-gray-800">Dashboard</h1>
+                
+                <!-- Backup & Restore Section -->
+                <div class="backup-restore-section">
+                    <button class="btn btn-success me-2" onclick="backupData()">
+                        <i class="fas fa-download me-2"></i>බැකප් ලබාගන්න
+                    </button>
+                    <button class="btn btn-warning" onclick="document.getElementById('restoreFile').click()">
+                        <i class="fas fa-upload me-2"></i>බැකප් ප්‍රතිස්ථාපනය
+                    </button>
+                    <input type="file" id="restoreFile" accept=".json" style="display: none" onchange="restoreData(this)">
+                </div>
+            </div>
+
+            <!-- Stats Cards Row -->
+            <div class="row" id="statsCards"></div>
+
+            <!-- Add Grade Form -->
+            <div class="card dashboard-card mb-4">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold text-primary">නව ශ්‍රේණියක් එකතු කරන්න</h6>
+                </div>
+                <div class="card-body">
+                    <div class="input-group">
+                        <input type="text" id="newGradeName" class="form-control" placeholder="ශ්‍රේණියේ නම">
+                        <button class="btn btn-primary" onclick="addGrade()">
+                            <i class="fas fa-plus me-2"></i>එකතු කරන්න
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grades Container -->
+            <div id="gradesContainer"></div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">වෙනස් කරන්න</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="text" id="editInput" class="form-control">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">අවලංගු කරන්න</button>
+                    <button type="button" class="btn btn-primary" onclick="saveEdit()">සුරකින්න</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let grades = [
+            {
+                name: '6 ශ්‍රේණිය',
+                classes: [
+                    { name: 'A', males: 0, females: 0 },
+                    { name: 'B', males: 0, females: 0 }
+                ]
+            },
+            {
+                name: '7 ශ්‍රේණිය',
+                classes: [
+                    { name: 'A', males: 0, females: 0 },
+                    { name: 'B', males: 0, females: 0 }
+                ]
+            }
+        ];
+        let currentEditItem = null;
+        let editModal = null;
+
+        window.onload = function() {
+            editModal = new bootstrap.Modal(document.getElementById('editModal'));
+            // Try to load data from localStorage
+            const savedData = localStorage.getItem('schoolData');
+            if (savedData) {
+                grades = JSON.parse(savedData);
+                renderGrades();
+                updateStatsCards();
+            }
+        }
+
+        // Backup & Restore Functions
+        function backupData() {
+            const data = JSON.stringify(grades, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `school_data_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function restoreData(input) {
+            const file = input.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        if (confirm('ආයාත කරන ලද දත්ත ප්‍රතිස්ථාපනය කිරීමට අවශ්‍යද?')) {
+                            grades = data;
+                            localStorage.setItem('schoolData', JSON.stringify(grades));
+                            renderGrades();
+                            updateStatsCards();
+                            alert('දත්ත සාර්ථකව ප්‍රතිස්ථාපනය කරන ලදී!');
+                        }
+                    } catch (error) {
+                        alert('දත්ත ප්‍රතිස්ථාපනය කිරීමේදී දෝෂයක් ඇති විය. කරුණාකර වලංගු බැකප් ගොනුවක් තෝරන්න.');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        // Edit functions
+        function startEdit(type, gradeIndex, classIndex = null) {
+            const editInput = document.getElementById('editInput');
+            currentEditItem = { type, gradeIndex, classIndex };
+            
+            if (type === 'grade') {
+                editInput.value = grades[gradeIndex].name;
+            } else if (type === 'class') {
+                editInput.value = grades[gradeIndex].classes[classIndex].name;
+            }
+            
+            editModal.show();
+        }
+
+        function saveEdit() {
+            const newValue = document.getElementById('editInput').value.trim();
+            if (!newValue) return;
+
+            const { type, gradeIndex, classIndex } = currentEditItem;
+
+            if (type === 'grade') {
+                grades[gradeIndex].name = newValue;
+            } else if (type === 'class') {
+                grades[gradeIndex].classes[classIndex].name = newValue;
+            }
+
+            localStorage.setItem('schoolData', JSON.stringify(grades));
+            editModal.hide();
+            renderGrades();
+            updateStatsCards();
+        }
+
+        // Delete functions
+        function deleteGrade(gradeIndex) {
+            if (confirm('මෙම ශ්‍රේණිය මකා දැමීමට අවශ්‍යද?')) {
+                grades.splice(gradeIndex, 1);
+                localStorage.setItem('schoolData', JSON.stringify(grades));
+                renderGrades();
+                updateStatsCards();
+            }
+        }
+
+        function deleteClass(gradeIndex, classIndex) {
+            if (confirm('මෙම පංතිය මකා දැමීමට අවශ්‍යද?')) {
+                grades[gradeIndex].classes.splice(classIndex, 1);
+                localStorage.setItem('schoolData', JSON.stringify(grades));
+                renderGrades();
+                updateStatsCards();
+            }
+        }
+
+        // Previous functions remain the same, but add localStorage updates
+        function addGrade() {
+            const gradeName = document.getElementById('newGradeName').value;
+            if (gradeName.trim()) {
+                grades.push({
+                    name: gradeName,
+                    classes: [{ name: 'A', males: 0, females: 0 }]
+                });
+                document.getElementById('newGradeName').value = '';
+                localStorage.setItem('schoolData', JSON.stringify(grades));
+                renderGrades();
+                updateStatsCards();
+            }
+        }
+
+        function addClass(gradeIndex) {
+            const className = prompt('නව පංතියේ නම ඇතුලත් කරන්න:');
+            if (className && className.trim()) {
+                grades[gradeIndex].classes.push({
+                    name: className,
+                    males: 0,
+                    females: 0
+                });
+                localStorage.setItem('schoolData', JSON.stringify(grades));
+                renderGrades();
+                updateStatsCards();
+            }
+        }
+
+        function updateCount(gradeIndex, classIndex, gender, increment) {
+            if (gender === 'male') {
+                grades[gradeIndex].classes[classIndex].males += increment;
+                if (grades[gradeIndex].classes[classIndex].males < 0) {
+                    grades[gradeIndex].classes[classIndex].males = 0;
+                }
+            } else {
+                grades[gradeIndex].classes[classIndex].females += increment;
+                if (grades[gradeIndex].classes[classIndex].females < 0) {
+                    grades[gradeIndex].classes[classIndex].females = 0;
+                }
+            }
+            localStorage.setItem('schoolData', JSON.stringify(grades));
+            renderGrades();
+            updateStatsCards();
+        }
+
+        // Update the renderGrades function to include edit and delete buttons
+        function renderGrades() {
+            const container = document.getElementById('gradesContainer');
+            container.innerHTML = '';
+
+            grades.forEach((grade, gradeIndex) => {
+                const gradeCard = document.createElement('div');
+                gradeCard.className = 'card dashboard-card grade-card';
+                
+                const totals = calculateTotals(grade);
+                
+                gradeCard.innerHTML = `
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">${grade.name}</h6>
+                        <div class="d-flex align-items-center">
+                            <button class="btn btn-primary btn-circle me-2" onclick="addClass(${gradeIndex})">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                            <button class="btn btn-info btn-circle me-2" onclick="startEdit('grade', ${gradeIndex})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-danger btn-circle" onclick="deleteGrade(${gradeIndex})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            ${grade.classes.map((cls, classIndex) => `
+                                <div class="col-xl-3 col-md-6">
+                                    <div class="card class-card">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                                <h5 class="card-title mb-0">${cls.name} පංතිය</h5>
+                                                <div>
+                                                    <button class="btn btn-sm btn-info me-1" onclick="startEdit('class', ${gradeIndex}, ${classIndex})">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-danger" onclick="deleteClass(${gradeIndex}, ${classIndex})">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="mb-2">
+                                                <span class="me-2">පිරිමි:</span>
+                                                <button class="btn btn-outline-danger counter-btn" onclick="updateCount(${gradeIndex}, ${classIndex}, 'male', -1)">
+                                                    <i class="fas fa-minus"></i>
+                                                </button>
+                                                <span class="mx-2">${cls.males}</span>
+                                                <button class="btn btn-outline-success counter-btn" onclick="updateCount(${gradeIndex}, ${classIndex}, 'male', 1)">
+                                                    <i class="fas fa-plus"></i>
+                                                </button>
+                                            </div>
+                                            <div class="mb-2">
+                                                <span class="me-2">ගැහැණු:</span>
+                                                <button class="btn btn-outline-danger counter-btn" onclick="updateCount(${gradeIndex}, ${classIndex}, 'female', -1)">
+                                                    <i class="fas fa-minus"></i>
+                                                </button>
+                                                <span class="mx-2">${cls.females}</span>
+                                                <button class="btn btn-outline-success counter-btn" onclick="updateCount(${gradeIndex}, ${classIndex}, 'female', 1)">
+                                                    <i class="fas fa-plus"></i>
+                                                </button>
+                                            </div>
+
+<div class="mt-2 text-primary fw-bold">
+                                                මුළු එකතුව: ${cls.males + cls.females}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="mt-3 p-3 bg-light rounded">
+                            <h6 class="mb-2 text-primary">${grade.name} - මුළු එකතුව</h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <i class="fas fa-male me-2"></i>පිරිමි: ${totals.males}
+                                </div>
+                                <div class="col-md-4">
+                                    <i class="fas fa-female me-2"></i>ගැහැණු: ${totals.females}
+                                </div>
+                                <div class="col-md-4">
+                                    <i class="fas fa-users me-2"></i>මුළු එකතුව: ${totals.total}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(gradeCard);
+            });
+        }
+
+        function calculateTotals(grade) {
+            return grade.classes.reduce((totals, cls) => {
+                totals.males += cls.males;
+                totals.females += cls.females;
+                totals.total += cls.males + cls.females;
+                return totals;
+            }, { males: 0, females: 0, total: 0 });
+        }
+
+        function calculateGrandTotal() {
+            return grades.reduce((grand, grade) => {
+                const totals = calculateTotals(grade);
+                grand.males += totals.males;
+                grand.females += totals.females;
+                grand.total += totals.total;
+                return grand;
+            }, { males: 0, females: 0, total: 0 });
+        }
+
+        function updateStatsCards() {
+            const grandTotal = calculateGrandTotal();
+            const statsCards = document.getElementById('statsCards');
+            
+            statsCards.innerHTML = `
+                <div class="col-xl-4 col-md-6">
+                    <div class="card stats-card primary">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col">
+                                    <div class="stats-title mb-1">මුළු සිසුන්</div>
+                                    <div class="stats-number">${grandTotal.total}</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-users fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-4 col-md-6">
+                    <div class="card stats-card success">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col">
+                                    <div class="stats-title mb-1">පිරිමි සිසුන්</div>
+                                    <div class="stats-number">${grandTotal.males}</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-male fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-4 col-md-6">
+                    <div class="card stats-card info">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col">
+                                    <div class="stats-title mb-1">ගැහැණු සිසුන්</div>
+                                    <div class="stats-number">${grandTotal.females}</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-female fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Initial render
+        renderGrades();
+        updateStatsCards();
+    </script>
+</body>
+</html>
